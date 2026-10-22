@@ -1,0 +1,133 @@
+/* EstilistaIA · estilos globales: Tailwind + tokens de diseño (claro/oscuro) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Tokens de diseño ── */
+:root {
+  --paper: #EEEDF3; --surface: #FFFFFF; --sunk: #E5E3ED; --ink: #22203A; --muted: #5D5977; --line: #D4D1E1;
+  --accent: #3346C8; --accent-soft: #DFE3FB; --accent-ink: #FFFFFF;
+  --tape: #F3CB4E; --tape-ink: #3B2F06; --tape-soft: #FBF0C9;
+  --ok: #1C7F4E; --ok-soft: #DBF1E4; --warn: #8F5B00; --warn-soft: #FAEDCF; --bad: #BF3434; --bad-soft: #F8DEDE;
+  --body: #D2CEDF; --body-line: #ABA6C2; --scrim: rgba(24, 22, 40, .45);
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15141D; --surface: #201E2B; --sunk: #2A2737; --ink: #ECEAF5; --muted: #A9A5C0; --line: #373349;
+    --accent: #95A2FF; --accent-soft: #2A2F57; --accent-ink: #121226;
+    --tape: #E8C04A; --tape-ink: #2E2405; --tape-soft: #2F2914;
+    --ok: #5BD39A; --ok-soft: #173528; --warn: #F0B54A; --warn-soft: #3A2E14; --bad: #FF8080; --bad-soft: #3D1F24;
+    --body: #3A3650; --body-line: #5A5476; --scrim: rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15141D; --surface: #201E2B; --sunk: #2A2737; --ink: #ECEAF5; --muted: #A9A5C0; --line: #373349;
+  --accent: #95A2FF; --accent-soft: #2A2F57; --accent-ink: #121226;
+  --tape: #E8C04A; --tape-ink: #2E2405; --tape-soft: #2F2914;
+  --ok: #5BD39A; --ok-soft: #173528; --warn: #F0B54A; --warn-soft: #3A2E14; --bad: #FF8080; --bad-soft: #3D1F24;
+  --body: #3A3650; --body-line: #5A5476; --scrim: rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; min-height: 100%; background: var(--paper); color: var(--ink);
+  font-family: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+/* Tapa la zona de la barra de estado del teléfono con el color del header */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 35; background: var(--paper); }
+.app-header { top: env(safe-area-inset-top, 0px); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+img { max-width: 100%; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; }
+.field {
+  width: 100%; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 12px; padding: .7rem .9rem; font: inherit;
+  min-height: 3rem; font-size: 1rem; /* 16 px: iOS no hace zoom al escribir */
+}
+.field:hover { border-color: var(--muted); }
+
+/* Etiqueta colgante: esquinas superiores cortadas + ojal */
+.tag {
+  position: relative; overflow: hidden; background: var(--surface);
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%, 0 16px);
+  border-radius: 0 0 14px 14px;
+}
+.tag::after {
+  content: ""; position: absolute; top: 9px; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%;
+  background: var(--paper); box-shadow: inset 0 0 0 1.5px var(--line); z-index: 2;
+}
+button.tag:hover { transform: translateY(-2px); }
+button.tag { transition: transform .2s ease; }
+
+/* ── Cinta métrica del nivel de confort ── */
+.tape {
+  --pad: 22px; position: relative; height: 72px; border-radius: 8px;
+  background: var(--tape); color: var(--tape-ink);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .12);
+}
+.tape--sm { height: 60px; --pad: 20px; }
+.tape__ticks {
+  position: absolute; top: 0; left: var(--pad); right: var(--pad); height: 22px;
+  background:
+    repeating-linear-gradient(90deg, currentColor 0 1.5px, transparent 1.5px calc(25% - .01px)),
+    repeating-linear-gradient(90deg, currentColor 0 1px, transparent 1px calc(5% - .01px));
+  background-size: 100% 22px, 100% 10px; background-repeat: no-repeat; opacity: .75;
+}
+.tape__ticks::after { content: ""; position: absolute; right: -1px; top: 0; width: 1.5px; height: 22px; background: currentColor; }
+.tape__num {
+  position: absolute; bottom: 9px; transform: translateX(-50%); font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; opacity: .7; pointer-events: none;
+}
+.tape__num.is-on { opacity: 0; }
+.tape__input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: grab; border-radius: 8px;
+}
+.tape__input:active { cursor: grabbing; }
+.tape__input:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.tape__input::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.tape__input::-moz-range-track { height: 100%; background: transparent; }
+.tape__input::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 44px; height: 44px; margin-top: 14px; border-radius: 50%;
+  background: var(--accent); border: 4px solid var(--surface); box-shadow: 0 0 0 1.5px var(--ink), 0 6px 14px rgba(20, 18, 40, .25);
+}
+.tape--sm .tape__input::-webkit-slider-thumb { width: 40px; height: 40px; margin-top: 10px; }
+.tape__input::-moz-range-thumb {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--accent);
+  border: 4px solid var(--surface); box-shadow: 0 0 0 1.5px var(--ink), 0 6px 14px rgba(20, 18, 40, .25);
+}
+
+/* ── Movimiento ── */
+.garment-layer { animation: layerIn .45s ease both; }
+.garment-path { transition: d .45s ease, fill .3s ease; }
+@keyframes layerIn { from { opacity: 0; } to { opacity: 1; } }
+.toast { animation: toastIn .35s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.sheet { animation: sheetIn .3s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes sheetIn { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Aparición del outfit generado */
+.reveal { animation: revealIn .5s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes revealIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Deslizadores de ajuste: círculo de 32 px, fácil de agarrar con el dedo (iPhone incluido) */
+.big-range { -webkit-appearance: none; appearance: none; height: 44px; background: transparent; touch-action: pan-y; }
+.big-range::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: var(--line); }
+.big-range::-moz-range-track { height: 8px; border-radius: 999px; background: var(--line); }
+.big-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 32px; height: 32px; margin-top: -12px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1.5px var(--ink), 0 3px 8px rgba(20, 18, 40, .25);
+}
+.big-range::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1.5px var(--ink); }
+.big-range:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
