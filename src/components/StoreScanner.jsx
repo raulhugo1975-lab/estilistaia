@@ -8,17 +8,16 @@ import { CATEGORIES, FITS, WAISTBANDS } from '../data/seed.js';
 import { colorName, dominantColor, resizeImage, shopLinks, uid } from '../lib/utils.js';
 import { analyzeStoreItem } from '../engine/outfitEngine.js';
 import { GarmentThumb } from './Mannequin.jsx';
+import { PhotoPicker } from './PhotoPicker.jsx';
 import { Badge, Button, Field, FriendDots, Icon, Segmented, ShopLinks } from './ui.jsx';
 
-export function StoreScanner({ wardrobe, log, onAdd, onClose, canAdd = true, onLimit }) {
+export function StoreScanner({ wardrobe, log, onAdd, onClose, canAdd = true, onLimit, categories = CATEGORIES }) {
   const [cand, setCand] = useState({ category: 'bottom', shape: 'pantalon', color: null, fit: 'regular', waistband: 'NONE', photo: null, name: '' });
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
   const set = (patch) => setCand((c) => ({ ...c, ...patch }));
 
-  async function onPhoto(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function onPhoto(file) {
     setBusy(true);
     try {
       const photo = await resizeImage(file, 360);
@@ -47,25 +46,22 @@ export function StoreScanner({ wardrobe, log, onAdd, onClose, canAdd = true, onL
     <div className="space-y-6">
       <ol className="space-y-6">
         <li>
-          <p className="mb-3 font-display text-lg font-semibold">1. Sacale una foto a la prenda</p>
+          <p className="mb-3 font-display text-lg font-semibold">1. Sacale una foto a la prenda que te gusta</p>
           <div className="flex items-center gap-4">
             <div className="tag h-32 w-24 shrink-0">
               {cand.photo ? <img src={cand.photo} alt="Prenda escaneada" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-sunk text-muted"><Icon name="camera" className="h-8 w-8" /></div>}
             </div>
             <div className="space-y-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-bold text-accent-ink focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent)]">
-                <Icon name="camera" /> {cand.photo ? 'Sacar otra' : 'Abrir cámara o galería'}
-                <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto} />
-              </label>
+              <PhotoPicker onPick={onPhoto} cameraLabel={cand.photo ? 'Sacar otra' : 'Sacar foto'} galleryLabel="Galería" size="md" />
               <p className="max-w-[34ch] text-sm text-muted">{busy ? 'Analizando colores…' : 'Encuadrá la prenda al centro, sobre un fondo liso si podés.'}</p>
             </div>
           </div>
         </li>
 
         <li>
-          <p className="mb-3 font-display text-lg font-semibold">2. Confirmá lo que ves en la etiqueta</p>
+          <p className="mb-3 font-display text-lg font-semibold">2. Contanos cómo es</p>
           <div className="space-y-4">
-            <Field as="div" label="Tipo"><Segmented label="Tipo" options={CATEGORIES} value={cand.category} onChange={(category) => set({ category })} size="sm" /></Field>
+            <Field as="div" label="Tipo"><Segmented label="Tipo" options={categories} value={cand.category} onChange={(category) => set({ category })} size="sm" /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Color detectado">
                 <span className="flex gap-2">
@@ -83,7 +79,7 @@ export function StoreScanner({ wardrobe, log, onAdd, onClose, canAdd = true, onL
         </li>
 
         <li aria-live="polite">
-          <p className="mb-3 font-display text-lg font-semibold">3. ¿Te la llevás?</p>
+          <p className="mb-3 font-display text-lg font-semibold">3. ¿Te conviene comprarla?</p>
           {!analysis ? (
             <p className="rounded-xl bg-sunk px-4 py-3 text-muted">Subí la foto o elegí un color para ver el análisis.</p>
           ) : (

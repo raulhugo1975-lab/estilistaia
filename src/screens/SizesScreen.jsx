@@ -29,10 +29,10 @@ function TrafficLight({ status }) {
 
 const fmt = (n) => String(n).replace('.', ',');
 
-export default function SizesScreen({ profile, setProfile, comfort }) {
+export default function SizesScreen({ profile, setProfile, comfort, genderCfg }) {
   const [fabric, setFabric] = useState('rigida');
   const [chartBrand, setChartBrand] = useState('Shein');
-  const cut = profile.sizeCut;
+  const cut = genderCfg.sizeCut || profile.sizeCut; // femenino y masculino: tabla fija; neutro: elige
   const m = profile.measures;
   const today = swollenMeasures(m, comfort, profile.swellCm);
   const rows = recommendSizes({ measures: m, cut, fabric, comfort, swellCm: profile.swellCm });
@@ -48,17 +48,24 @@ export default function SizesScreen({ profile, setProfile, comfort }) {
 
       <section className="panel space-y-6 p-5 sm:p-7" aria-label="Tus medidas">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <NumberField label="Busto o pecho" value={m.bust} onChange={(v) => updateMeasure('bust', v)} />
+          <NumberField label={genderCfg.chestLabel} value={m.bust} onChange={(v) => updateMeasure('bust', v)} />
           <NumberField label="Cintura" value={m.waist} onChange={(v) => updateMeasure('waist', v)} />
           <NumberField label="Cadera" value={m.hip} onChange={(v) => updateMeasure('hip', v)} />
           <NumberField label="Variación en tu peor día" value={profile.swellCm} max={30} onChange={(v) => setProfile((p) => ({ ...p, swellCm: v }))} />
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-4">
-          <div>
-            <p className="mb-2 text-sm font-bold">Tabla de la marca</p>
-            <Segmented label="Tabla de la marca" value={cut} onChange={(sizeCut) => setProfile((p) => ({ ...p, sizeCut }))}
-              options={[{ id: 'femenino', label: 'Corte femenino' }, { id: 'masculino', label: 'Corte masculino' }]} />
-          </div>
+          {genderCfg.sizeCut ? (
+            <div>
+              <p className="mb-2 text-sm font-bold">Tabla de la marca</p>
+              <p className="flex min-h-[2.75rem] items-center rounded-xl bg-sunk px-4 font-bold">{cut === 'masculino' ? 'Talles de hombre' : 'Talles de mujer'}</p>
+            </div>
+          ) : (
+            <div>
+              <p className="mb-2 text-sm font-bold">Tabla de la marca</p>
+              <Segmented label="Tabla de la marca" value={cut} onChange={(sizeCut) => setProfile((p) => ({ ...p, sizeCut }))}
+                options={[{ id: 'femenino', label: 'Talles de mujer' }, { id: 'masculino', label: 'Talles de hombre' }]} />
+            </div>
+          )}
           <div>
             <p className="mb-2 text-sm font-bold">Tipo de prenda</p>
             <Segmented label="Tipo de prenda" value={fabric} onChange={setFabric} options={FABRIC_OPTIONS} />
@@ -95,7 +102,7 @@ export default function SizesScreen({ profile, setProfile, comfort }) {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[420px] text-left tabular-nums">
             <thead className="text-sm text-muted">
-              <tr><th className="py-2 pr-4 font-bold">Talle</th><th className="py-2 pr-4 font-bold">Busto o pecho</th><th className="py-2 pr-4 font-bold">Cintura</th><th className="py-2 font-bold">Cadera</th></tr>
+              <tr><th className="py-2 pr-4 font-bold">Talle</th><th className="py-2 pr-4 font-bold">{cut === 'masculino' ? 'Pecho' : 'Busto'}</th><th className="py-2 pr-4 font-bold">Cintura</th><th className="py-2 font-bold">Cadera</th></tr>
             </thead>
             <tbody>
               {SIZE_CHARTS[cut][chartBrand].map((row) => {

@@ -16,8 +16,9 @@ import { shade } from '../lib/utils.js';
 const C = 150; // eje central del lienzo 300 × 480
 const LOOSENESS = { ajustado: 0.05, regular: 0.4, holgado: 0.9 };
 
-export function bodyDims(shapeId, comfort = 1) {
-  const base = (BODY_SHAPES.find((s) => s.id === shapeId) || BODY_SHAPES[0]).dims;
+/** @param custom  semianchos medidos (escaneo o medidas propias); si no hay, se usa la silueta tipo. */
+export function bodyDims(shapeId, comfort = 1, custom = null) {
+  const base = custom || (BODY_SHAPES.find((s) => s.id === shapeId) || BODY_SHAPES[0]).dims;
   const swell = (comfort - 1) * 1.6;
   return { ...base, W: base.W + swell, H: base.H + swell * 0.4 };
 }
@@ -39,7 +40,7 @@ function topPath(d, L, tucked) {
     `L ${C - d.S - 5} 166 L ${C - d.S - 20 - e * 0.5} 158 L ${C - d.S - 3} 105 Z`;
 }
 
-function bottomPath(d, L, shape) {
+function bottomPath(d, L, shape, name) {
   const e = L * 12;
   const wx = d.W + e * 0.3;
   if (shape === 'falda') {
@@ -49,8 +50,9 @@ function bottomPath(d, L, shape) {
   }
   const leg = 7 + L * 22;          // semiancho de la botamanga
   const inner = Math.max(2, 16 - leg);
-  return `M ${C - wx} 204 L ${C + wx} 204 Q ${C + d.H + e} 232 ${C + d.H + e * 0.6} 262 L ${C + 16 + leg} 444 L ${C + inner} 444 ` +
-    `L ${C + 3} 288 L ${C - 3} 288 L ${C - inner} 444 L ${C - 16 - leg} 444 L ${C - d.H - e * 0.6} 262 Q ${C - d.H - e} 232 ${C - wx} 204 Z`;
+  const hem = shape === 'short' || /bermuda|short/i.test(name || '') ? 336 : 444; // short y bermuda: a la rodilla
+  return `M ${C - wx} 204 L ${C + wx} 204 Q ${C + d.H + e} 232 ${C + d.H + e * 0.6} 262 L ${C + 16 + leg} ${hem} L ${C + inner} ${hem} ` +
+    `L ${C + 3} 288 L ${C - 3} 288 L ${C - inner} ${hem} L ${C - 16 - leg} ${hem} L ${C - d.H - e * 0.6} 262 Q ${C - d.H - e} 232 ${C - wx} 204 Z`;
 }
 
 function dressPath(d, L) {
@@ -106,9 +108,10 @@ function Layer({ item, children }) {
  * @param {object} props.pieces      { top, bottom, dress, outer, shoes }
  * @param {string|null} props.photo  foto de cuerpo entero (opcional)
  * @param {{dy:number, s:number}} props.align  ajuste de las capas sobre la foto
+ * @param {{S,B,W,H}|null} props.custom       avatar con las medidas de la persona (ver dimsFromBody)
  */
-export function Mannequin({ shapeId, comfort = 1, pieces = {}, photo = null, align = { dy: 0, s: 1 }, className = '', label }) {
-  const d = bodyDims(shapeId, comfort);
+export function Mannequin({ shapeId, comfort = 1, pieces = {}, photo = null, align = { dy: 0, s: 1 }, custom = null, className = '', label }) {
+  const d = bodyDims(shapeId, comfort, custom);
   const { top, bottom, dress, outer, shoes } = pieces;
   const tucked = top && top.fit !== 'holgado';
   const L = (it) => LOOSENESS[it?.fit] ?? 0.4;
@@ -140,7 +143,7 @@ export function Mannequin({ shapeId, comfort = 1, pieces = {}, photo = null, ali
       )}
 
       <g transform={garmentTransform} opacity={photo ? 0.86 : 1}>
-        {bottom && <Layer key={bottom.id} item={bottom}>{bottomPath(d, L(bottom), bottom.shape)}</Layer>}
+        {bottom && <Layer key={bottom.id} item={bottom}>{bottomPath(d, L(bottom), bottom.shape, bottom.name)}</Layer>}
         {top && <Layer key={top.id} item={top}>{topPath(d, L(top), tucked)}</Layer>}
         {bottom && (tucked || !top) && <Waistband key={`wb-${bottom.id}`} d={d} item={bottom} />}
         {dress && <Layer key={dress.id} item={dress}>{dressPath(d, L(dress))}</Layer>}

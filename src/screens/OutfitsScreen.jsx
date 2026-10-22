@@ -11,26 +11,26 @@ import { COMFORT_LEVELS, OCCASIONS, SEASONS } from '../data/seed.js';
 import { SLOTS } from '../engine/outfitEngine.js';
 import { shopLinks } from '../lib/utils.js';
 
-export default function OutfitsScreen({ plan, setPlan, result, comfort, symptoms, profile, onTryOn, isPremium, requestPremium }) {
+export default function OutfitsScreen({ plan, setPlan, result, comfort, symptoms, profile, onTryOn, isPremium, requestPremium, avatarDims, weather }) {
   const ergonomic = comfort >= 3;
   const occasion = OCCASIONS.find((o) => o.id === plan.occasion)?.label.toLowerCase();
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="font-display text-[clamp(1.75rem,4vw,2.4rem)] font-semibold tracking-tight">Outfits para hoy</h1>
-        <p className="mt-1 text-muted">Nivel {comfort}, {COMFORT_LEVELS[comfort - 1].name.toLowerCase()}. Cambialo arriba y las sugerencias se recalculan.</p>
+        <h1 className="font-display text-[clamp(1.75rem,4vw,2.4rem)] font-semibold tracking-tight">Tus outfits de hoy</h1>
+        <p className="mt-1 text-muted">Elegí para qué es y el clima. Los armamos con tu ropa y tu comodidad de hoy ({COMFORT_LEVELS[comfort - 1].name.toLowerCase()}).</p>
       </header>
 
       <section className="panel space-y-4 p-5 sm:p-6" aria-label="Ocasión y clima">
         <div>
-          <p className="mb-2 text-sm font-bold">Ocasión</p>
+          <p className="mb-2 font-display text-lg font-semibold">¿Para qué es?</p>
           <div className="flex flex-wrap gap-2">
             {OCCASIONS.map((o) => <Chip key={o.id} selected={plan.occasion === o.id} onClick={() => setPlan((p) => ({ ...p, occasion: o.id }))}>{o.label}</Chip>)}
           </div>
         </div>
         <div>
-          <p className="mb-2 text-sm font-bold">Clima</p>
+          <p className="mb-2 font-display text-lg font-semibold">¿Qué clima hace?{weather?.weather && <span className="ml-2 text-base font-normal text-muted">Automático: {weather.weather.temp}° {weather.place ? `en ${weather.place}` : ''}</span>}</p>
           <Segmented label="Clima" options={SEASONS} value={plan.season} onChange={(season) => setPlan((p) => ({ ...p, season }))} />
         </div>
       </section>
@@ -38,11 +38,11 @@ export default function OutfitsScreen({ plan, setPlan, result, comfort, symptoms
       {(ergonomic || result.discarded.length > 0) && (
         <section className="rounded-[22px] border-2 border-dashed p-5 sm:p-6" style={{ borderColor: ergonomic ? 'var(--tape)' : 'var(--line)' }} aria-labelledby="rule-title">
           <h2 id="rule-title" className="font-display text-lg font-semibold">
-            {ergonomic ? 'Regla de ergonomía activa' : 'Ajustes por cómo te sentís'}
+            {ergonomic ? 'Dejamos afuera lo que aprieta' : 'Ajustes por cómo te sentís'}
           </h2>
           <p className="mt-1 max-w-[70ch] text-muted">
             {ergonomic
-              ? 'Con nivel 3 o más descartamos botones rígidos y cortes ceñidos abajo, y priorizamos pretinas elásticas, cordones y telas con caída.'
+              ? 'Hoy tu cuerpo pide comodidad: no te sugerimos prendas con botón y cierre ni cortes pegados en la cintura. Priorizamos elásticos y telas sueltas.'
               : 'Algunos síntomas que marcaste dejan prendas fuera, aunque tu nivel sea bajo.'}
           </p>
           {result.discarded.length > 0 ? (
@@ -77,7 +77,7 @@ export default function OutfitsScreen({ plan, setPlan, result, comfort, symptoms
                   onUnlock={() => requestPremium('Con Premium ves todas las combinaciones que arma el motor, no solo la primera.')}>
                 <div className="flex flex-1 flex-col">
                 <div className="flex items-start gap-3 bg-sunk px-4 pt-4">
-                  <Mannequin shapeId={profile.bodyShape} comfort={comfort} pieces={o.pieces} className="h-60 w-auto shrink-0" />
+                  <Mannequin shapeId={profile.bodyShape} comfort={comfort} pieces={o.pieces} custom={avatarDims} className="h-60 w-auto shrink-0" />
                   <div className="ml-auto pt-1 text-right">
                     <p className="text-sm text-muted">Opción {i + 1}</p>
                     <p className="font-display text-4xl font-semibold tabular-nums">{o.score}<span className="text-base text-muted">%</span></p>

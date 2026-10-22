@@ -1,122 +1,180 @@
 /**
- * Alta y edición de prendas del guardarropa.
- * Al subir una foto, se reduce de tamaño y se detecta su color dominante.
+ * Agregar o editar una prenda, en pocas decisiones:
+ *   1. Foto (cámara directa o galería)  2. ¿Qué es?  3. ¿Cómo cierra en la cintura?  4. ¿Cómo te queda?
+ * Todo lo demás (color, tela, clima, ocasiones) tiene valores por defecto
+ * y queda plegado en "Más detalles".
  */
 import React, { useState } from 'react';
-import { CATEGORIES, FABRICS, FITS, OCCASIONS, SEASONS, WAISTBANDS } from '../data/seed.js';
-import { dominantColor, resizeImage, uid } from '../lib/utils.js';
+import { CATEGORIES, FABRICS, OCCASIONS, SEASONS } from '../data/seed.js'; // CATEGORIES: nombre automático
+import { colorName, dominantColor, resizeImage, uid } from '../lib/utils.js';
 import { guessFriendliness } from '../engine/outfitEngine.js';
+import { getGenderConfig } from '../lib/gender.js';
 import { GarmentThumb } from './Mannequin.jsx';
-import { Button, Chip, Field, FriendDots, Icon, Segmented } from './ui.jsx';
+import { PhotoPicker } from './PhotoPicker.jsx';
+import { Button, Chip, Field, FriendDots, Icon } from './ui.jsx';
 
 const EMPTY = {
-  name: '', category: 'top', shape: 'pantalon', color: '#7C8AA5', seasons: ['templado'], occasions: ['casual'],
+  name: '', category: 'top', shape: 'pantalon', color: '#7C8AA5',
+  seasons: ['calido', 'templado', 'frio'], occasions: ['casa', 'casual', 'trabajo'],
   comfort: 3, waistband: 'NONE', fit: 'regular', fabric: 'Algodón', photo: null,
 };
 
-export function GarmentForm({ initial, onSave, onDelete, onCancel }) {
+/** Opciones con palabras de todos los días y una ayuda corta. */
+const WAIST_OPTIONS = [
+  { id: 'ELASTIC_BAND', label: 'Elástico', help: 'Se estira solo' },
+  { id: 'DRAWSTRING', label: 'Con cordón', help: 'Lo ajustás vos' },
+  { id: 'RIGID_BUTTON', label: 'Botón y cierre', help: 'Como un jean' },
+];
+const FIT_OPTIONS = [
+  { id: 'ajustado', label: 'Ajustada', help: 'Pegada al cuerpo' },
+  { id: 'regular', label: 'Normal', help: 'Ni suelta ni pegada' },
+  { id: 'holgado', label: 'Suelta', help: 'Con espacio' },
+];
+const hasWaist = (cat) => cat === 'bottom' || cat === 'dress';
+
+/** Grupo de botones grandes con título y ayuda (radio accesible). */
+function BigChoice({ label, options, value, onChange, cols = 3 }) {
+  return (
+    <fieldset>
+      <legend className="mb-2 font-display text-lg font-semibold">{label}</legend>
+      <div role="radiogroup" aria-label={label} className={`grid gap-2 ${cols === 5 ? 'grid-cols-3 sm:grid-cols-5' : cols === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+        {options.map((o) => (
+          <button key={o.id} type="button" role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
+            className={`min-h-[3.5rem] rounded-2xl border-2 px-2 py-2 text-center transition-colors ${value === o.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:border-ink'}`}>
+            <span className="block font-bold leading-tight">{o.label}</span>
+            {o.help && <span className="mt-0.5 block text-[0.8rem] text-muted">{o.help}</span>}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+export function GarmentForm({ initial, onSave, onDelete, onCancel, style }) {
   const [g, setG] = useState(() => ({ ...EMPTY, ...initial }));
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isNew = !initial?.id;
-  const set = (patch) => setG((x) => ({ ...x, ...patch }));
+  const gcfg = getGenderConfig(style, initial?.category);
+  const set = (patch) => setG((x) => {
+    const next = { ...x, ...patch };
+    if (!hasWaist(next.category)) next.waistband = 'NONE';
+    else if (next.waistband === 'NONE') next.waistband = 'ELASTIC_BAND';
+    if ('fit' in patch || 'waistband' in patch || 'category' in patch) next.comfort = guessFriendliness(next);
+    return next;
+  });
   const toggle = (key, id) => set({ [key]: g[key].includes(id) ? g[key].filter((v) => v !== id) : [...g[key], id] });
+  const autoName = `${CATEGORIES.find((c) => c.id === g.category)?.long} ${colorName(g.color)}`;
 
-  async function onPhoto(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function onPhoto(file) {
     setBusy(true);
+    setError('');
     try {
       const photo = await resizeImage(file, 360);
       set({ photo, color: await dominantColor(photo) });
     } catch {
-      setError('No pudimos leer esa imagen. Probá con un JPG o PNG.');
+      setError('No pudimos abrir esa foto. Probá con otra.');
     } finally {
       setBusy(false);
     }
   }
 
   function submit() {
-    if (!g.name.trim()) return setError('Poné un nombre para reconocer la prenda.');
-    if (!g.seasons.length || !g.occasions.length) return setError('Elegí al menos un clima y una ocasión.');
-    onSave({ ...g, name: g.name.trim(), id: g.id || uid() });
+    if (!g.seasons.length || !g.occasions.length) {
+      setMoreOpen(true);
+      return setError('Elegí al menos un clima y una ocasión en "Más detalles".');
+    }
+    onSave({ ...g, example: false, name: g.name.trim() || autoName, id: g.id || uid() });
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex gap-4">
-        <div className="tag h-36 w-28 shrink-0"><GarmentThumb item={g} /></div>
-        <div className="flex flex-col justify-center gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line px-4 py-2.5 font-bold hover:border-ink focus-within:outline focus-within:outline-2 focus-within:outline-[var(--accent)]">
-            <Icon name="upload" /> {g.photo ? 'Cambiar foto' : 'Subir foto'}
-            <input type="file" accept="image/*" className="sr-only" onChange={onPhoto} />
-          </label>
-          <p className="text-sm text-muted">{busy ? 'Leyendo la foto…' : g.photo ? 'Detectamos el color de la foto; podés corregirlo abajo.' : 'Opcional. Si no subís foto, usamos el color.'}</p>
+    <div className="space-y-6">
+      {/* 1. Foto */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="tag mx-auto h-44 w-36 shrink-0 sm:mx-0"><GarmentThumb item={g} /></div>
+        <div className="flex-1 space-y-2">
+          <PhotoPicker onPick={onPhoto} cameraLabel={g.photo ? 'Sacar otra foto' : 'Sacar foto'} stacked />
+          <p className="text-[0.92rem] text-muted" aria-live="polite">
+            {busy ? 'Leyendo la foto…' : g.photo ? 'Listo. Tomamos el color de la foto.' : 'Poné la prenda sobre una superficie lisa, con buena luz.'}
+          </p>
         </div>
       </div>
 
-      <Field label="Nombre">
-        <input className="field" value={g.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ej.: Pantalón wide leg negro" />
-      </Field>
-
-      <Field as="div" label="Tipo de prenda">
-        <Segmented label="Tipo de prenda" options={CATEGORIES} value={g.category} onChange={(category) => set({ category })} />
-      </Field>
+      {/* 2. Tipo */}
+      <BigChoice label="¿Qué es?" cols={gcfg.categories.length} value={g.category} onChange={(category) => set({ category })}
+        options={gcfg.categories.map((c) => ({ id: c.id, label: c.label }))} />
       {g.category === 'bottom' && (
-        <Field as="div" label="Forma">
-          <Segmented label="Forma" options={[{ id: 'pantalon', label: 'Pantalón o short' }, { id: 'falda', label: 'Falda' }]} value={g.shape} onChange={(shape) => set({ shape })} />
-        </Field>
+        <BigChoice label={gcfg.gender === 'masculino' ? '¿Largo o corto?' : '¿Pantalón o falda?'} value={g.shape} onChange={(shape) => set({ shape })}
+          options={gcfg.bottomShapes} />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Color (HEX)">
-          <span className="flex gap-2">
-            <input type="color" value={g.color} onChange={(e) => set({ color: e.target.value.toUpperCase() })} className="h-11 w-14 cursor-pointer rounded-lg border border-line bg-surface p-1" aria-label="Elegir color" />
-            <input className="field font-bold uppercase tabular-nums" value={g.color} maxLength={7}
-              onChange={(e) => /^#[0-9a-fA-F]{0,6}$/.test(e.target.value) && set({ color: e.target.value.toUpperCase() })} />
-          </span>
-        </Field>
-        <Field label="Tela">
-          <select className="field" value={g.fabric} onChange={(e) => set({ fabric: e.target.value })}>
-            {FABRICS.map((f) => <option key={f}>{f}</option>)}
-          </select>
-        </Field>
+      {/* 3. Cintura (solo si tiene) */}
+      {hasWaist(g.category) && (
+        <BigChoice label="¿Cómo cierra en la cintura?" value={g.waistband} onChange={(waistband) => set({ waistband })} options={WAIST_OPTIONS} />
+      )}
+
+      {/* 4. Calce */}
+      <BigChoice label="¿Cómo te queda?" value={g.fit} onChange={(fit) => set({ fit })} options={FIT_OPTIONS} />
+
+      <Field label="Nombre (opcional)">
+        <input className="field" value={g.name} onChange={(e) => setG((x) => ({ ...x, name: e.target.value }))} placeholder={autoName} />
+      </Field>
+
+      <p className="flex flex-wrap items-center gap-2 rounded-2xl bg-sunk px-4 py-3 text-[0.95rem]">
+        Comodidad en días de hinchazón: <FriendDots value={g.comfort} />
+        <span className="text-muted">{g.comfort >= 4 ? 'muy cómoda' : g.comfort === 3 ? 'intermedia' : 'mejor para días livianos'}</span>
+      </p>
+
+      {/* Más detalles */}
+      <div className="rounded-2xl border border-line">
+        <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}
+          className="flex min-h-[3rem] w-full items-center justify-between px-4 font-bold">
+          Más detalles (opcional)
+          <span aria-hidden="true" className={`transition-transform ${moreOpen ? 'rotate-90' : ''}`}><Icon name="arrow" className="h-5 w-5" /></span>
+        </button>
+        {moreOpen && (
+          <div className="space-y-5 border-t border-line p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Color">
+                <span className="flex gap-2">
+                  <input type="color" value={g.color} onChange={(e) => set({ color: e.target.value.toUpperCase() })} className="h-12 w-16 cursor-pointer rounded-xl border border-line bg-surface p-1" aria-label="Elegir color" />
+                  <input className="field font-bold uppercase" value={g.color} maxLength={7}
+                    onChange={(e) => /^#[0-9a-fA-F]{0,6}$/.test(e.target.value) && setG((x) => ({ ...x, color: e.target.value.toUpperCase() }))} aria-label="Color en código HEX" />
+                </span>
+              </Field>
+              <Field label="Tela">
+                <select className="field" value={g.fabric} onChange={(e) => set({ fabric: e.target.value })}>
+                  {FABRICS.map((f) => <option key={f}>{f}</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field as="div" label="¿Para qué clima?">
+              <div className="flex flex-wrap gap-2">{SEASONS.map((s) => <Chip key={s.id} selected={g.seasons.includes(s.id)} onClick={() => toggle('seasons', s.id)}>{s.label}</Chip>)}</div>
+            </Field>
+            <Field as="div" label="¿Cuándo la usás?">
+              <div className="flex flex-wrap gap-2">{OCCASIONS.map((o) => <Chip key={o.id} selected={g.occasions.includes(o.id)} onClick={() => toggle('occasions', o.id)}>{o.label}</Chip>)}</div>
+            </Field>
+            <Field label="Comodidad en días de hinchazón" hint="La calculamos por el cierre y el calce. Cambiala si con esta prenda te pasa otra cosa.">
+              <span className="flex items-center gap-4">
+                <input type="range" min="1" max="5" value={g.comfort} onChange={(e) => set({ comfort: Number(e.target.value) })} className="h-8 w-full accent-[var(--accent)]" aria-valuetext={`${g.comfort} de 5`} />
+                <FriendDots value={g.comfort} />
+              </span>
+            </Field>
+          </div>
+        )}
       </div>
 
-      <Field as="div" label="Corte">
-        <Segmented label="Corte" options={FITS} value={g.fit} onChange={(fit) => set({ fit, comfort: guessFriendliness({ fit, waistband: g.waistband }) })} />
-      </Field>
-      <Field as="div" label="Tipo de pretina">
-        <Segmented label="Tipo de pretina" options={WAISTBANDS} value={g.waistband} onChange={(waistband) => set({ waistband, comfort: guessFriendliness({ fit: g.fit, waistband }) })} />
-      </Field>
+      {error && <p role="alert" className="rounded-2xl bg-bad-soft px-4 py-3 text-bad">{error}</p>}
 
-      <Field label="Amigabilidad ante la inflamación" hint="La estimamos según el corte y la pretina; ajustala si tu experiencia es otra.">
-        <span className="flex items-center gap-4">
-          <input type="range" min="1" max="5" value={g.comfort} onChange={(e) => set({ comfort: Number(e.target.value) })} className="w-full accent-[var(--accent)]" aria-valuetext={`${g.comfort} de 5`} />
-          <FriendDots value={g.comfort} />
-        </span>
-      </Field>
-
-      <Field as="div" label="Clima">
-        <div className="flex flex-wrap gap-2">{SEASONS.map((s) => <Chip key={s.id} selected={g.seasons.includes(s.id)} onClick={() => toggle('seasons', s.id)}>{s.label}</Chip>)}</div>
-      </Field>
-      <Field as="div" label="Ocasiones">
-        <div className="flex flex-wrap gap-2">{OCCASIONS.map((o) => <Chip key={o.id} selected={g.occasions.includes(o.id)} onClick={() => toggle('occasions', o.id)}>{o.label}</Chip>)}</div>
-      </Field>
-
-      {error && <p role="alert" className="rounded-xl bg-bad-soft px-4 py-3 text-bad">{error}</p>}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+      <div className="flex flex-col-reverse gap-2 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
         {!isNew ? (
           confirmDelete
-            ? <Button variant="danger" onClick={() => onDelete(g.id)}>Confirmar eliminación</Button>
+            ? <Button variant="danger" onClick={() => onDelete(g.id)}>Sí, eliminar</Button>
             : <Button variant="ghost" onClick={() => setConfirmDelete(true)}>Eliminar prenda</Button>
-        ) : <span />}
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
-          <Button onClick={submit}>{isNew ? 'Agregar al guardarropa' : 'Guardar cambios'}</Button>
-        </div>
+        ) : <Button variant="ghost" onClick={onCancel}>Cancelar</Button>}
+        <Button size="lg" onClick={submit} disabled={busy}><Icon name="check" className="h-6 w-6" /> {isNew ? 'Guardar prenda' : 'Guardar cambios'}</Button>
       </div>
     </div>
   );

@@ -16,6 +16,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComfortQuick } from './components/ComfortTape.jsx';
 import { AuthModal } from './components/AuthModal.jsx';
+import { BodyScan } from './components/BodyScan.jsx';
+import { Onboarding } from './components/Onboarding.jsx';
+import { dimsFromBody } from './lib/bodyMeasure.js';
 import { PlansModal, PremiumBanner } from './components/Premium.jsx';
 import { ShareModal } from './components/ShareModal.jsx';
 import { Icon } from './components/ui.jsx';
@@ -27,6 +30,8 @@ import { useCloudSync } from './lib/cloudSync.js';
 import { usePremium } from './lib/premium.js';
 import { HAS_CLOUD } from './lib/supabase.js';
 import { dateKey } from './lib/utils.js';
+import { cleanSymptoms, examplesFor, getGenderConfig } from './lib/gender.js';
+import { useWeather } from './lib/weather.js';
 import OutfitsScreen from './screens/OutfitsScreen.jsx';
 import SizesScreen from './screens/SizesScreen.jsx';
 import TodayScreen from './screens/TodayScreen.jsx';
@@ -35,7 +40,7 @@ import WardrobeScreen from './screens/WardrobeScreen.jsx';
 
 const TABS = [
   { id: 'hoy', label: 'Hoy', icon: 'today' },
-  { id: 'guardarropa', label: 'Guardarropa', icon: 'hanger' },
+  { id: 'guardarropa', label: 'Mi ropa', icon: 'hanger' },
   { id: 'outfits', label: 'Outfits', icon: 'spark' },
   { id: 'probador', label: 'Probador', icon: 'mirror' },
   { id: 'talles', label: 'Talles', icon: 'ruler' },
@@ -99,6 +104,35 @@ export default function App() {
     if (remote.symptoms) setSymptoms(remote.symptoms);
   });
 
+  // Escaneo corporal: se abre desde Hoy, el probador o la bienvenida.
+  const [scan, setScan] = useState({ open: false, mode: 'scan' });
+  const openScan = useCallback((mode = 'scan') => setScan({ open: true, mode: typeof mode === 'string' ? mode : 'scan' }), []);
+  /** Guarda el cuerpo: medidas para talles, silueta para el motor y la foto (solo local) para el probador. */
+  const saveBody = useCallback((body, photo) => {
+    setProfile((p) => ({ ...p, body, heightCm: body.heightCm, measures: body.measures, bodyShape: getGenderConfig(p.style).shapeFor(body.shape) }));
+    if (photo) setBodyPhoto(photo);
+  }, [setProfile, setBodyPhoto]);
+  // Género: decide síntomas, prendas, siluetas, términos y tabla de talles (lib/gender.js).
+  const genderCfg = useMemo(() => getGenderConfig(profile.style), [profile.style]);
+  /** Cambiar de género adapta todo de una vez: silueta, tabla de talles, síntomas y ropa de ejemplo. */
+  const changeGender = useCallback((style) => {
+    const cfg = getGenderConfig(style);
+    setProfile((p) => ({ ...p, style, bodyShape: cfg.shapeFor(p.bodyShape), sizeCut: cfg.sizeCut ?? p.sizeCut }));
+    setSymptoms((s) => cleanSymptoms(s, style));
+    setWardrobe((w) => (w.some((g) => g.example) ? [...w.filter((g) => !g.example), ...examplesFor(style)] : w));
+  }, [setProfile, setSymptoms, setWardrobe]);
+  // Avatar: tus medidas si las hay; si no, la silueta tipo de tu género.
+  const avatarDims = useMemo(
+    () => (profile.body ? dimsFromBody(profile.body) : genderCfg.shapeInfo(profile.bodyShape).dims),
+    [profile.body, profile.bodyShape, genderCfg],
+  );
+
+  // Clima automático: el motor usa el clima real en vez de "templado" fijo.
+  const weather = useWeather();
+  useEffect(() => {
+    if (weather.season && weather.season !== plan.season) setPlan((p) => ({ ...p, season: weather.season }));
+  }, [weather.season]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Monetización: prueba de 7 días, referidos y suscripción real con Stripe.
   const premiumPlan = usePremium(auth, requestAuth);
   const { isPremium } = premiumPlan;
@@ -124,17 +158,20 @@ export default function App() {
     setOverride(null);
   }, [setComfortRaw, setLog]);
 
-  const ctx = useMemo(() => ({ comfort, symptoms, occasion: plan.occasion, season: plan.season, bodyShape: profile.bodyShape }),
-    [comfort, symptoms, plan.occasion, plan.season, profile.bodyShape]);
+  const ctx = useMemo(() => ({
+    comfort, symptoms, occasion: plan.occasion, season: plan.season, bodyShape: profile.bodyShape,
+    shapeTip: genderCfg.shapeInfo(profile.bodyShape).tip, rain: weather.rainy,
+  }), [comfort, symptoms, plan.occasion, plan.season, profile.bodyShape, genderCfg, weather.rainy]);
   const result = useMemo(() => suggestOutfits(wardrobe, ctx), [wardrobe, ctx]);
 
   const goTo = (id) => { setTab(id); window.scrollTo({ top: 0 }); };
-  const shared = { profile, setProfile, comfort, setComfort, symptoms, setSymptoms, wardrobe, setWardrobe, log, plan, setPlan, result, isPremium, requestPremium };
+  const shared = { profile, setProfile, comfort, setComfort, symptoms, setSymptoms, wardrobe, setWardrobe, log, plan, setPlan, result, isPremium, requestPremium, avatarDims, openScan, genderCfg, changeGender, weather };
+  const tryOn = (pieces) => { setOverride(pieces); goTo('probador'); };
 
   const screens = {
-    hoy: <TodayScreen {...shared} goTo={goTo} />,
+    hoy: <TodayScreen {...shared} goTo={goTo} bodyPhoto={bodyPhoto} onTryOn={tryOn} />,
     guardarropa: <WardrobeScreen {...shared} />,
-    outfits: <OutfitsScreen {...shared} onTryOn={(pieces) => { setOverride(pieces); goTo('probador'); }} />,
+    outfits: <OutfitsScreen {...shared} onTryOn={tryOn} />,
     probador: <TryOnScreen {...shared} override={override} setOverride={setOverride} bodyPhoto={bodyPhoto} setBodyPhoto={setBodyPhoto} />,
     talles: <SizesScreen {...shared} />,
   };
@@ -180,6 +217,13 @@ export default function App() {
 
       <PlansModal open={plans.open} reason={plans.reason} plan={premiumPlan} onClose={() => setPlans({ open: false, reason: '' })} onShare={openShare} />
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} plan={premiumPlan} requestAuth={requestAuth} />
+      <BodyScan open={scan.open} startWith={scan.mode} onClose={() => setScan((x) => ({ ...x, open: false }))} onSave={saveBody}
+        initialHeight={profile.heightCm || 165} initialMeasures={profile.measures} style={profile.style} />
+      {profile.onboarded === false && (
+        <Onboarding profile={profile} setProfile={setProfile} comfort={comfort} setComfort={setComfort} openScan={openScan} genderCfg={genderCfg} changeGender={changeGender}
+          onLogin={HAS_CLOUD && !auth.user ? () => requestAuth('') : null}
+          onDone={() => { setProfile((p) => ({ ...p, onboarded: true })); goTo('hoy'); }} />
+      )}
       {HAS_CLOUD && <AuthModal open={authModal.open} reason={authModal.reason} onClose={() => setAuthModal({ open: false, reason: '' })} />}
 
       {/* Barra inferior (móvil) */}
@@ -187,8 +231,8 @@ export default function App() {
         <div className="grid grid-cols-5">
           {TABS.map((t) => (
             <button key={t.id} type="button" onClick={() => goTo(t.id)} aria-current={tab === t.id ? 'page' : undefined}
-              className={`flex flex-col items-center gap-1 py-2.5 text-[0.72rem] ${tab === t.id ? 'font-bold text-accent' : 'text-muted'}`}>
-              <Icon name={t.icon} className="h-6 w-6" /> {t.label}
+              className={`flex min-h-[4rem] flex-col items-center justify-center gap-1 text-[0.8rem] ${tab === t.id ? 'font-bold text-accent' : 'text-muted'}`}>
+              <span className={`flex h-8 w-14 items-center justify-center rounded-full ${tab === t.id ? 'bg-accent-soft' : ''}`}><Icon name={t.icon} className="h-6 w-6" /></span> {t.label}
             </button>
           ))}
         </div>

@@ -5,7 +5,11 @@
  *   profiles.trial_started_at → prueba de 7 días (una por cuenta, hora del servidor)
  *   profiles.ref_code / referred_by → referidos
  *   subscriptions → estado real de Stripe (lo escribe el webhook)
- * El simulador solo existe en desarrollo (o con VITE_SHOW_PREMIUM_SIMULATOR=true).
+ * MODO DEMO (VITE_SHOW_PREMIUM_SIMULATOR=true, o en desarrollo):
+ *   todas las funciones Premium quedan abiertas por defecto para testers, y la
+ *   franja superior permite ver la app "como Premium", "como gratuita" o "en prueba"
+ *   (con "+1 día" para simular el vencimiento). NUNCA lo actives en el sitio público:
+ *   cualquiera tendría Premium sin pagar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase.js';
@@ -14,6 +18,7 @@ export const TRIAL_DAYS = 7;
 const DAY = 864e5;
 const env = import.meta.env;
 export const SHOW_SIMULATOR = env.DEV || env.VITE_SHOW_PREMIUM_SIMULATOR === 'true';
+export const DEMO_MODE = SHOW_SIMULATOR;
 export const PRICE_LABEL = env.VITE_PRICE_LABEL || '';
 const PUBLIC_URL = () => (env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
 const PENDING_REF = 'estilistaia:pendingRef';
@@ -49,7 +54,11 @@ export function usePremium(auth, requestAuth) {
   const { session, user, ready } = auth;
   const [account, setAccount] = useState({ profile: null, subscription: null, referrals: 0 });
   const [billing, setBilling] = useState({ loading: false, error: '', notice: '' });
-  const [sim, setSim] = useState({ on: false, offsetDays: 0, startedAt: null }); // solo desarrollo
+  // Modo demo: 'premium' (por defecto) | 'free' | 'trial'. Se recuerda en el dispositivo.
+  const [sim, setSim] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('estilistaia:demoView')) || { view: 'premium', offsetDays: 0, startedAt: null }; } catch { return { view: 'premium', offsetDays: 0, startedAt: null }; }
+  });
+  useEffect(() => { try { localStorage.setItem('estilistaia:demoView', JSON.stringify(sim)); } catch { /* nada */ } }, [sim]);
   const pendingSession = useRef(null);
 
   const refresh = useCallback(async () => {
@@ -103,11 +112,11 @@ export function usePremium(auth, requestAuth) {
   const sub = account.subscription;
   const isPro = !!sub && ACTIVE.includes(sub.status);
   const status = useMemo(
-    () => trialStatus(sim.on ? sim.startedAt : account.profile?.trial_started_at, sim.offsetDays),
+    () => (DEMO_MODE ? trialStatus(sim.view === 'trial' ? sim.startedAt : null, sim.offsetDays) : trialStatus(account.profile?.trial_started_at)),
     [sim, account.profile?.trial_started_at],
   );
-  const isPremium = isPro || status.active;
-  const canStartTrial = !status.used;
+  const isPremium = DEMO_MODE ? sim.view === 'premium' || status.active : isPro || status.active;
+  const canStartTrial = DEMO_MODE ? sim.view !== 'trial' : !status.used;
 
   const callApi = useCallback(async (path) => {
     setBilling({ loading: true, error: '', notice: '' });
@@ -125,16 +134,16 @@ export function usePremium(auth, requestAuth) {
   const manage = useCallback(() => callApi('/api/portal'), [callApi]);
 
   const startTrial = useCallback(async () => {
-    if (SHOW_SIMULATOR && !user) { setSim({ on: true, offsetDays: 0, startedAt: new Date().toISOString() }); return; }
+    if (DEMO_MODE) { setSim({ view: 'trial', offsetDays: 0, startedAt: new Date().toISOString() }); return; }
     if (!user) { requestAuth(`Creá tu cuenta gratis para activar los ${TRIAL_DAYS} días de Premium. No pedimos tarjeta.`); return; }
     const { error } = await supabase.rpc('start_trial');
     if (error) setBilling({ loading: false, error: 'No pudimos activar la prueba. Probá de nuevo.', notice: '' });
     await refresh();
   }, [user, requestAuth, refresh]);
 
-  const simulator = SHOW_SIMULATOR ? {
-    on: sim.on,
-    toggle: (on) => setSim(on ? { on: true, offsetDays: 0, startedAt: new Date().toISOString() } : { on: false, offsetDays: 0, startedAt: null }),
+  const simulator = DEMO_MODE ? {
+    view: sim.view,
+    setView: (view) => setSim({ view, offsetDays: 0, startedAt: view === 'trial' ? new Date().toISOString() : null }),
     advanceDay: () => setSim((s) => ({ ...s, offsetDays: s.offsetDays + 1 })),
   } : null;
 

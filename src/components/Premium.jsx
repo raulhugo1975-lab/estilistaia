@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { FREE_LIMITS, PLAN_FEATURES, PRICE_LABEL, SHOW_SIMULATOR, TRIAL_DAYS } from '../lib/premium.js';
-import { Button, Icon, Modal } from './ui.jsx';
+import { Button, Icon, Modal, Segmented } from './ui.jsx';
 
 /** Interruptor accesible (role="switch"). */
 function Switch({ checked, onChange, label }) {
@@ -41,7 +41,8 @@ export function PremiumBanner({ plan, onShare, onPlans }) {
   const referred = !!account.profile?.referred_by;
 
   let text;
-  if (billing.error) text = <span className="text-bad"><b>No se pudo completar:</b> {billing.error}</span>;
+  if (simulator?.view === 'premium') text = <><b>Modo demo:</b> todo desbloqueado para probar.</>;
+  else if (billing.error) text = <span className="text-bad"><b>No se pudo completar:</b> {billing.error}</span>;
   else if (billing.notice) text = <b>{billing.notice}</b>;
   else if (billing.loading) text = <>Conectando con el sistema de pagos…</>;
   else if (isPro) text = sub?.current_period_end
@@ -54,32 +55,40 @@ export function PremiumBanner({ plan, onShare, onPlans }) {
       <DaysLeft left={status.left} />
     </span>
   );
-  else if (status.expired) text = <><b>Tu prueba de {TRIAL_DAYS} días terminó.</b> Suscribite para seguir con todo desbloqueado.</>;
-  else text = <><b>Versión gratuita:</b> hasta {FREE_LIMITS.wardrobe} prendas, {FREE_LIMITS.outfits} sugerencia por ocasión y probador con silueta.</>;
+  else if (status.expired) text = <><b>Terminó tu prueba gratis.</b> <span className="hidden sm:inline">Suscribite para seguir con todo.</span></>;
+  else text = <><b>Versión gratuita.</b> <span className="hidden sm:inline">Probá Premium gratis: ropa sin límite, todos los outfits y el probador con tu foto.</span></>;
 
   return (
     <div className={`border-b border-line ${isPremium ? 'bg-[var(--tape-soft)]' : 'bg-surface'}`} role="region" aria-label="Tu plan">
       <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:px-8">
-        {simulator && <Switch checked={simulator.on} label="Simular prueba (dev)" onChange={simulator.toggle} />}
+        {simulator && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-ink px-2.5 py-1 text-[0.75rem] font-bold uppercase tracking-wide text-paper">Demo</span>
+            <Segmented label="Ver la app como" size="sm" value={simulator.view} onChange={simulator.setView}
+              options={[{ id: 'premium', label: 'Premium' }, { id: 'free', label: 'Gratuita' }, { id: 'trial', label: 'En prueba' }]} />
+          </div>
+        )}
         <p className="min-w-0 flex-1 text-[0.92rem]" role="status">{text}</p>
         <div className="flex flex-wrap items-center gap-1.5">
-          {simulator?.on && status.active && (
-            <Button variant="ghost" className="!px-2.5 !py-1.5 text-sm" onClick={simulator.advanceDay}>Simular +1 día</Button>
+          {simulator?.view === 'trial' && status.active && (
+            <Button variant="ghost" size="sm" onClick={simulator.advanceDay}>Simular +1 día</Button>
           )}
-          {isPro || sub?.status === 'past_due' ? (
-            <Button variant="ghost" className="!px-2.5 !py-1.5 text-sm" onClick={manage} disabled={billing.loading}>Gestionar suscripción</Button>
+          {simulator?.view === 'premium' ? null : isPro || sub?.status === 'past_due' ? (
+            <Button variant="ghost" size="sm" onClick={manage} disabled={billing.loading}>Gestionar suscripción</Button>
           ) : (
             <>
               {canStartTrial && !status.active && (
-                <Button variant="secondary" className="!px-3 !py-1.5 text-sm" onClick={startTrial}>Probar {TRIAL_DAYS} días gratis</Button>
+                <Button size="sm" onClick={startTrial}>Probar {TRIAL_DAYS} días gratis</Button>
               )}
-              <Button className="!px-3 !py-1.5 text-sm" onClick={subscribe} disabled={billing.loading}>
-                {billing.loading ? 'Abriendo pago…' : `Suscribirme${PRICE_LABEL ? ` (${PRICE_LABEL})` : ''}`}
-              </Button>
+              {!(canStartTrial && !status.active) && (
+                <Button size="sm" onClick={subscribe} disabled={billing.loading}>
+                  {billing.loading ? 'Abriendo pago…' : `Suscribirme${PRICE_LABEL ? ` (${PRICE_LABEL})` : ''}`}
+                </Button>
+              )}
             </>
           )}
-          <Button variant="ghost" className="!px-2.5 !py-1.5 text-sm" onClick={onPlans}>Ver planes</Button>
-          <Button variant="secondary" className="!px-3 !py-1.5 text-sm" onClick={onShare}><Icon name="share" className="h-4 w-4" /> Invitar</Button>
+          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={onPlans}>Ver planes</Button>
+          <Button variant="ghost" size="sm" onClick={onShare} aria-label="Invitar a un amige"><Icon name="share" className="h-5 w-5" /><span className="hidden sm:inline">Invitar</span></Button>
         </div>
       </div>
     </div>

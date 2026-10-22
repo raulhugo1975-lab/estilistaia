@@ -3,6 +3,7 @@
  * Todos usan los tokens de color definidos en index.html (claro/oscuro).
  */
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const ICONS = {
   today: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
@@ -20,6 +21,11 @@ const ICONS = {
   external: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 14v6H4V6h6" /></>,
   share: <><circle cx="18" cy="5.5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="18.5" r="2.5" /><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1" /></>,
   lock: <><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></>,
+  shirt: <path d="M8 4 4 7l2 4 2-1v10h8V10l2 1 2-4-4-3a4 4 0 0 1-8 0z" />,
+  phone: <><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></>,
+  body: <><circle cx="12" cy="4.5" r="2.2" /><path d="M12 7v7M7 9.5l5 1.5 5-1.5M9.5 21l2.5-7 2.5 7" /></>,
+  arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+  pin: <><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>,
   undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></>,
 };
 
@@ -38,9 +44,12 @@ const BTN = {
   danger: 'bg-bad-soft text-bad hover:brightness-95',
 };
 
-export function Button({ variant = 'primary', className = '', children, ...props }) {
+/** Tamaños pensados para el dedo: md = 48 px de alto, lg = 56 px (acciones principales). */
+const SIZES = { sm: 'min-h-[2.5rem] px-3.5 text-sm', md: 'min-h-[3rem] px-5 text-base', lg: 'min-h-[3.5rem] px-6 text-[1.05rem]' };
+
+export function Button({ variant = 'primary', size = 'md', className = '', children, ...props }) {
   return (
-    <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[0.95rem] font-bold transition disabled:opacity-50 ${BTN[variant]} ${className}`} {...props}>
+    <button type="button" className={`inline-flex items-center justify-center gap-2 rounded-2xl font-bold transition active:scale-[.98] disabled:opacity-50 ${SIZES[size]} ${BTN[variant]} ${className}`} {...props}>
       {children}
     </button>
   );
@@ -50,7 +59,7 @@ export function Button({ variant = 'primary', className = '', children, ...props
 export function Chip({ selected, onClick, children }) {
   return (
     <button type="button" aria-pressed={!!selected} onClick={onClick}
-      className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${selected ? 'bg-ink text-paper border-ink' : 'bg-surface text-ink border-line hover:border-ink'}`}>
+      className={`min-h-[2.75rem] rounded-full border px-4 py-2 text-[0.95rem] transition-colors ${selected ? 'bg-ink text-paper border-ink' : 'bg-surface text-ink border-line hover:border-ink'}`}>
       {children}
     </button>
   );
@@ -62,7 +71,7 @@ export function Segmented({ label, options, value, onChange, size = 'md' }) {
     <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-xl bg-sunk p-1">
       {options.map((o) => (
         <button key={o.id} type="button" role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
-          className={`rounded-lg ${size === 'sm' ? 'px-2.5 py-1 text-sm' : 'px-3 py-1.5 text-[0.93rem]'} transition-colors ${value === o.id ? 'bg-surface text-ink font-bold shadow-[0_1px_0_var(--line)]' : 'text-muted hover:text-ink'}`}>
+          className={`rounded-lg ${size === 'sm' ? 'min-h-[2.25rem] px-3 py-1 text-sm' : 'min-h-[2.75rem] px-4 py-2 text-[0.98rem]'} transition-colors ${value === o.id ? 'bg-surface text-ink font-bold shadow-[0_1px_0_var(--line)]' : 'text-muted hover:text-ink'}`}>
           {o.label}
         </button>
       ))}
@@ -86,7 +95,7 @@ export function NumberField({ label, value, onChange, suffix = 'cm', min = 0, ma
       <span className="relative block">
         <input type="number" inputMode="decimal" min={min} max={max} value={value}
           onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-          className="field pr-10 tabular-nums" />
+          className="field pr-10 text-[1.05rem] tabular-nums" />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">{suffix}</span>
       </span>
     </Field>
@@ -115,38 +124,47 @@ export function FriendDots({ value }) {
   );
 }
 
+/** Pila de modales abiertos: Esc y el foco solo afectan al de arriba (ej. cámara sobre un formulario). */
+const modalStack = [];
+let modalSeq = 0;
+
 /** Diálogo modal: hoja inferior en móvil, ventana centrada en escritorio. */
 export function Modal({ open, onClose, title, children, wide = false }) {
   const ref = useRef(null);
+  const id = useRef(++modalSeq);
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    modalStack.push(id.current);
+    const onKey = (e) => e.key === 'Escape' && modalStack[modalStack.length - 1] === id.current && onClose();
     window.addEventListener('keydown', onKey);
     const prev = document.activeElement;
     ref.current?.focus();
     document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      modalStack.splice(modalStack.indexOf(id.current), 1);
+      if (!modalStack.length) document.body.style.overflow = '';
       prev?.focus?.();
     };
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal al <body>: un modal dentro de otro (cámara sobre el formulario) se ve encima, sin recortes.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" style={{ background: 'var(--scrim)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
         className={`sheet w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-xl'} max-h-[92dvh] overflow-y-auto bg-surface outline-none rounded-t-[26px] sm:rounded-[26px]`}>
         <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-line bg-surface px-5 py-4 sm:px-7">
           <h2 className="font-display text-xl font-semibold">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-sunk" aria-label="Cerrar">
+          <button type="button" onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-sunk" aria-label="Cerrar">
             <Icon name="x" />
           </button>
         </div>
         <div className="px-5 py-5 sm:px-7" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

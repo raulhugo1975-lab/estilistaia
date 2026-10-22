@@ -11,7 +11,7 @@
  *                         mejores con justificación.
  * Es determinista y local: no necesita IA externa para funcionar.
  */
-import { BODY_SHAPES, WAISTBANDS } from '../data/seed.js';
+import { WAISTBANDS } from '../data/seed.js';
 import { colorHarmony, hexToHsl } from '../lib/utils.js';
 
 export const SLOTS = ['outer', 'top', 'bottom', 'dress', 'shoes'];
@@ -82,6 +82,8 @@ function itemScore(item, ctx) {
   if (comfort <= 2 && ['trabajo', 'evento'].includes(occasion) && item.fit !== 'holgado') s += 0.15;
   if (symptoms.includes('calor') && ['Lino', 'Algodón'].includes(item.fabric)) s += 0.15;
   if (symptoms.includes('ciclo') && item.category === 'bottom' && hexToHsl(item.color).l < 0.35) s += 0.15;
+  // Lluvia: calzado abierto y gamuza quedan atrás; botas y calzado cerrado suman.
+  if (ctx.rain && item.category === 'shoes') s += /sandalia|ojota|alpargata/i.test(item.name) ? -0.6 : /bota/i.test(item.name) ? 0.2 : 0;
   return s + shapeBonus(item, bodyShape);
 }
 
@@ -119,8 +121,8 @@ function buildNotes(pieces, pairs, ctx) {
     else if (worst.score < 0.5) notes.push(`Contraste fuerte entre ${worst.a.name.toLowerCase()} y ${worst.b.name.toLowerCase()}: si buscás algo más sereno, mirá otra sugerencia.`);
     else notes.push('Colores en equilibrio triádico.');
   }
-  const shape = BODY_SHAPES.find((s) => s.id === ctx.bodyShape);
-  if (shape && shape.id !== 'recta') notes.push(shape.tip);
+  // El consejo de silueta llega ya adaptado al género (ver lib/gender.js).
+  if (ctx.shapeTip && ctx.bodyShape !== 'recta') notes.push(ctx.shapeTip);
   return notes.slice(0, 4);
 }
 
@@ -146,7 +148,7 @@ function scoreOutfit(pieces, ctx) {
 /**
  * Cruza ocasión + clima + estado físico con el guardarropa.
  * @param {import('../data/seed.js').Garment[]} wardrobe
- * @param {{comfort:number, symptoms:string[], occasion:string, season:string, bodyShape:string}} ctx
+ * @param {{comfort:number, symptoms:string[], occasion:string, season:string, bodyShape:string, shapeTip?:string, rain?:boolean}} ctx
  * @returns {{ outfits: Array, discarded: Array<{item, reasons:string[]}>, gaps: Array<{label, query}> }}
  */
 export function suggestOutfits(wardrobe, ctx, max = 3) {
